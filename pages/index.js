@@ -1,57 +1,50 @@
-// pages/index.js
-import { useState, useEffect } from "react";
-import { db } from "../lib/firebase";
+import { useEffect, useState } from "react";
+import { rtdb } from "../lib/firebase";
 import {
-  collection,
-  addDoc,
-  onSnapshot,
-  query,
-  orderBy,
-  serverTimestamp,
-} from "firebase/firestore";
+  ref,
+  push,
+  set,
+  onValue,
+  serverTimestamp
+} from "firebase/database";
 
 export default function Home() {
   const [title, setTitle] = useState("");
   const [tasks, setTasks] = useState([]);
 
-  const handleAdd = async () => {
-    if (!title.trim()) return;
-    await addDoc(collection(db, "tasks"), {
-      title,
-      createdAt: serverTimestamp(),
-    });
-    setTitle("");
-  };
-
   useEffect(() => {
-    const q = query(collection(db, "tasks"), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setTasks(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+    const tasksRef = ref(rtdb, "tasks");
+    const unsubscribe = onValue(tasksRef, (snapshot) => {
+      const data = snapshot.val() || {};
+      const formatted = Object.entries(data).map(([id, value]) => ({
+        id,
+        ...value,
+      }));
+      setTasks(formatted);
     });
     return () => unsubscribe();
   }, []);
 
+  const handleAdd = async () => {
+    const tasksRef = ref(rtdb, "tasks");
+    const newTaskRef = push(tasksRef);
+    await set(newTaskRef, {
+      title,
+      createdAt: new Date().toISOString(),
+    });
+    setTitle("");
+  };
+
   return (
-    <main style={{ padding: 30, fontFamily: "sans-serif" }}>
-      <h1>📋 Aries Marine – Live Tasks</h1>
-
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="Enter task title"
-        style={{ padding: 8, marginRight: 10 }}
-      />
-      <button onClick={handleAdd} style={{ padding: 8 }}>
-        Add Task
-      </button>
-
-      <ul style={{ marginTop: 20 }}>
+    <div>
+      <h1>Realtime Tasks</h1>
+      <input value={title} onChange={(e) => setTitle(e.target.value)} />
+      <button onClick={handleAdd}>Add Task</button>
+      <ul>
         {tasks.map((task) => (
-          <li key={task.id} style={{ margin: "5px 0" }}>
-            ✅ {task.title}
-          </li>
+          <li key={task.id}>{task.title}</li>
         ))}
       </ul>
-    </main>
+    </div>
   );
 }
